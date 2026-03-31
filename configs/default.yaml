@@ -1,0 +1,106 @@
+# ============================================================
+# Assignment 3: Evaluation & Diagnostic Analysis
+# CS-818 LLMs — MTRAGEval (SemEval 2026 Task 8)
+# ============================================================
+
+# --- Reproducibility ---
+seed: 42
+deterministic: true
+
+# --- Dataset ---
+dataset:
+  base_path: "data/mt-rag-benchmark"
+  version: "v1.0"
+  chunk_size: 512
+
+# --- Retrieval ---
+retrieval:
+  methods:
+    - bm25
+    - dense
+    - hybrid
+  bm25:
+    k1: 1.5
+    b: 0.75
+  dense:
+    model: "sentence-transformers/all-mpnet-base-v2"
+    batch_size: 64
+    embedding_dim: 768
+    similarity: cosine
+  hybrid:
+    bm25_weight: 0.4
+    dense_weight: 0.6
+  top_k: 10
+  history_modes:
+    - last_turn_only
+    - full_history
+    - window_2
+    - window_3
+    - no_history
+
+# --- Generation ---
+generation:
+  models:
+    - name: "Llama-3-8B-Instruct"
+      hf_id: "meta-llama/Meta-Llama-3-8B-Instruct"
+      quantization: "4bit"
+      max_new_tokens: 256
+      temperature: 0.0
+    - name: "Qwen-2.5-7B-Instruct"
+      hf_id: "Qwen/Qwen2.5-7B-Instruct"
+      quantization: "4bit"
+      max_new_tokens: 256
+      temperature: 0.0
+  prompt_variants:
+    - standard
+    - faithfulness_constrained
+    - chain_of_thought
+    - unanswerable_aware
+  num_val_examples: 200   # full val set for A3 (was 50 in A2)
+
+# --- Evaluation ---
+evaluation:
+  task_a:
+    metrics: [ndcg, precision, recall, mrr, hit_rate]
+    k_values: [1, 3, 5, 10]
+    primary_metric: "ndcg@10"
+  task_b:
+    metrics: [rouge_l, bertscore, faithfulness_nli, unanswerable_f1]
+    bertscore_model: "microsoft/deberta-xlarge-mnli"
+    faithfulness_model: "cross-encoder/nli-deberta-v3-base"
+    primary_metric: "harmonic_mean"
+
+# --- Diagnostic Analysis ---
+diagnostic:
+  breakdown_by:
+    - question_type          # factoid / explanatory / comparative / unanswerable
+    - multiturn_type         # follow_up / clarification / topic_shift
+    - domain                 # clapnq / govt / (others)
+    - answerability          # answerable / unanswerable
+    - history_mode
+  error_taxonomy:
+    categories:
+      - retrieval_rank_error       # correct passage exists but ranked low
+      - retrieval_miss             # correct passage not retrieved at all
+      - coreference_failure        # pronoun/ellipsis not resolved
+      - synthesis_failure          # multi-passage aggregation failed
+      - hallucination              # generation adds unsupported content
+      - unanswerable_hallucination # model generates for unanswerable Qs
+      - history_neglect            # long conv history ignored
+      - partial_answer             # correct but incomplete
+  ablation:
+    history_window_sizes: [0, 1, 2, 3, 5, -1]   # -1 = full
+    retrieval_k_values: [1, 3, 5, 10]
+    prompt_variants: [standard, faithfulness_constrained, chain_of_thought, unanswerable_aware]
+
+# --- Output ---
+output:
+  results_dir: "artifacts/results"
+  logs_dir: "artifacts/logs"
+  figures_dir: "artifacts/results/figures"
+
+# --- Hardware ---
+hardware:
+  gpu: "NVIDIA A10G"
+  cuda_version: "11.8"
+  vram_gb: 24
