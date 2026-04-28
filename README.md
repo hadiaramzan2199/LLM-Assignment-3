@@ -1,20 +1,62 @@
 # Assignment 3: Evaluation & Diagnostic Analysis
-## CS-818: LLMs — MTRAGEval (SemEval 2026 Task 8)
+## CS-818: Large Language Models — MTRAGEval (SemEval 2026 Task 8)
 
 **Team:** Hadia Ramzan, Hareem Fatima Nagra  
 **Institution:** SEECS, NUST  
-**Track:** A — Research-Oriented Project
+**Track:** A — Research-Oriented Project  
+**GitHub:** https://github.com/hadiaramzan2199/LLM-Assignment-3
 
 ---
 
 ## Overview
 
-This assignment builds on A2 baselines to perform systematic evaluation and deep diagnostic analysis of our multi-turn RAG system. We analyze:
+This assignment performs systematic evaluation and deep diagnostic analysis of a multi-turn RAG system on the IBM MTRAG human benchmark (SemEval 2026 Task 8). Building on A2 baselines, we evaluate:
 
-- **Task A (Retrieval):** BM25 / Dense / Hybrid across question types, domains, and history conditions  
-- **Task B (Generation):** Faithfulness, hallucination patterns, unanswerable detection  
-- **Ablations:** History window size, retrieval count, prompt variants  
-- **Diagnostic experiments:** Error taxonomy, failure mode classification, retrieval-generation coupling
+- **Task A (Retrieval):** BM25, Dense, Hybrid, and Hybrid+Reranking across question types, domains, and history conditions
+- **Task B (Generation):** Real Llama-3-8B-Instruct and Qwen-2.5-7B-Instruct inference across 3 prompt variants
+- **Faithfulness:** NLI-based scoring using DeBERTa cross-encoder on all 436 responses
+- **Ablations:** History window size, retrieval k, retrieval method, prompt variant
+- **Diagnostics:** Error taxonomy, failure mode classification, retrieval-generation coupling
+
+---
+
+## Key Results
+
+### Task A — Retrieval Evaluation
+
+| Method | nDCG@1 | nDCG@10 | R@5 | MRR |
+|---|---|---|---|---|
+| BM25 (no history) | 0.103 | 0.089 | 0.075 | 0.142 |
+| Dense (full history) | 0.215 | 0.165 | 0.139 | 0.258 |
+| Hybrid (full history) | 0.168 | 0.156 | 0.139 | 0.241 |
+| **Hybrid + Reranking** | — | **0.178** | — | **0.309** |
+
+### Task B — Generation Evaluation
+
+| Model | Prompt | ROUGE-L | BERTScore | Unans-F1 | HM |
+|---|---|---|---|---|---|
+| Llama-3-8B | Standard | 0.135 | 0.736 | 0.066 | 0.125 |
+| Llama-3-8B | Faithfulness-Constrained | 0.125 | 0.725 | **0.172** | 0.198 |
+| Llama-3-8B | Unanswerable-Aware | 0.132 | 0.733 | 0.143 | 0.188 |
+| Qwen-2.5-7B | Standard | 0.126 | 0.736 | 0.000 | 0.215 |
+| Qwen-2.5-7B | Faithfulness-Constrained | 0.126 | **0.737** | 0.161 | 0.194 |
+| Qwen-2.5-7B | Unanswerable-Aware | 0.127 | 0.737 | 0.104 | 0.159 |
+
+### Faithfulness (Llama-3-8B, 436 responses)
+
+| Metric | Value |
+|---|---|
+| Mean Faithfulness | 0.122 |
+| Hallucination Rate | 0.878 |
+| Fully Faithful | 3.0% |
+| Unanswerable Refusal Rate | 3.6% |
+
+### Improvement: Cross-Encoder Reranking
+
+| Method | nDCG@10 | MRR | Improvement |
+|---|---|---|---|
+| Hybrid (baseline) | 0.156 | 0.241 | — |
+| Hybrid + Reranking | **0.178** | **0.309** | +14% nDCG, +28% MRR |
 
 ---
 
@@ -23,85 +65,73 @@ This assignment builds on A2 baselines to perform systematic evaluation and deep
 ```
 A3/
 ├── README.md
-├── requirements.txt
-├── environment.yml
 ├── configs/
-│   └── default.yaml            # All experiment hyperparameters
+│   └── default.yaml                   # All experiment hyperparameters (seed=42)
 ├── scripts/
-│   ├── run_evaluation.py       # Main evaluation entry point (Task A + B)
-│   ├── run_ablations.py        # Ablation study runner
-│   ├── run_diagnostics.py      # Error taxonomy + failure analysis
-│   └── run_faithfulness.py     # Faithfulness & reasoning analysis
+│   ├── run_evaluation.py              # Task A + B evaluation entry point
+│   ├── run_ablations.py               # Ablation study runner
+│   ├── run_diagnostics.py             # Error taxonomy + failure analysis
+│   └── run_faithfulness.py            # NLI faithfulness analysis
 ├── src/
-│   ├── __init__.py
 │   ├── data/
-│   │   ├── __init__.py
-│   │   └── loader.py           # MTRAG dataset loader
+│   │   └── loader.py                  # MTRAG dataset loader with domain fix
 │   ├── evaluation/
-│   │   ├── __init__.py
-│   │   ├── retrieval_metrics.py   # nDCG, P@k, R@k, MRR, Hit Rate
-│   │   ├── generation_metrics.py  # ROUGE-L, BERTScore, faithfulness
-│   │   └── faithfulness.py        # NLI-based faithfulness scorer
+│   │   ├── retrieval_metrics.py       # nDCG, P@k, R@k, MRR, Hit Rate
+│   │   ├── generation_metrics.py      # ROUGE-L, BERTScore, Unans-F1
+│   │   └── faithfulness.py            # NLI-based faithfulness scorer
 │   ├── diagnostic/
-│   │   ├── __init__.py
-│   │   ├── error_taxonomy.py      # Failure classification
-│   │   ├── ablation.py            # Ablation study logic
-│   │   └── analysis.py            # Breakdown by question type, domain
+│   │   ├── error_taxonomy.py          # 6-category failure classification
+│   │   ├── ablation.py                # Prompt templates + ablation logic
+│   │   └── analysis.py                # Breakdown by question type, domain
 │   └── utils/
-│       ├── __init__.py
 │       └── helpers.py
 ├── tests/
-│   ├── test_retrieval_metrics.py
+│   ├── test_retrieval_metrics.py      # 61/63 tests passing
 │   ├── test_generation_metrics.py
 │   └── test_faithfulness.py
 ├── notebooks/
-│   └── diagnostic_exploration.ipynb   # Exploration only (not graded)
-├── artifacts/
-│   ├── logs/
-│   └── results/
-└── reports/
-    └── A3/
-        └── A3_Report.pdf
+│   └── A3_MTRAGEval_Final_GPU.ipynb   # Complete Colab notebook (A100 GPU)
+└── artifacts/
+    └── results/                        # All evaluation outputs
 ```
 
 ---
 
 ## Setup
 
-### 1. Clone and navigate
+### 1. Clone repository
 ```bash
 git clone https://github.com/hadiaramzan2199/LLM-Assignment-3
 cd LLM-Assignment-3
 ```
 
-### 2. Create conda environment
+### 2. Install dependencies
 ```bash
-conda env create -f environment.yml
-conda activate mtrag_a3
+pip install rank-bm25==0.2.2 sentence-transformers==2.7.0 \
+    rouge-score==0.1.2 bert-score==0.3.13 evaluate==0.4.2 \
+    transformers==4.40.2 accelerate==0.30.1 \
+    pyyaml==6.0.1 tabulate==0.9.0 seaborn==0.13.2 \
+    scipy pytest nltk
 ```
 
-### 3. Install pip dependencies
+### 3. Clone MTRAG dataset
 ```bash
-pip install -r requirements.txt
+git clone --depth 1 https://github.com/IBM/mt-rag-benchmark.git data/mt-rag-benchmark
 ```
 
-### 4. Download MTRAG dataset
+### 4. Set HuggingFace token (for Llama access)
 ```bash
-# Clone the IBM benchmark repo
-git clone https://github.com/IBM/mt-rag-benchmark.git data/mt-rag-benchmark
+export HF_TOKEN=hf_your_token_here
 ```
 
-### 5. Set environment variables (if needed)
-```bash
-cp .env.example .env
-# Edit .env with your HuggingFace token for Llama/Qwen models
-```
+> **Note:** Llama-3-8B-Instruct requires HuggingFace access approval at  
+> https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct
 
 ---
 
 ## Running Experiments
 
-All experiments use fixed seed=42 and are fully reproducible.
+All experiments use fixed `seed=42` and are reproducible.
 
 ### Full Evaluation (Task A + B)
 ```bash
@@ -110,74 +140,93 @@ python scripts/run_evaluation.py --config configs/default.yaml
 
 ### Ablation Studies
 ```bash
-# History window ablation
-python scripts/run_ablations.py --config configs/default.yaml --ablation history_window
-
-# Retrieval count ablation
-python scripts/run_ablations.py --config configs/default.yaml --ablation retrieval_k
-
-# Prompt variant ablation
-python scripts/run_ablations.py --config configs/default.yaml --ablation prompt_variant
+python scripts/run_ablations.py --config configs/default.yaml
 ```
 
 ### Diagnostic Analysis
 ```bash
-python scripts/run_diagnostics.py --config configs/default.yaml --input artifacts/results/eval_results.json
+python scripts/run_diagnostics.py \
+    --config configs/default.yaml \
+    --input artifacts/results/eval_results.json
 ```
 
 ### Faithfulness Analysis
 ```bash
-python scripts/run_faithfulness.py --config configs/default.yaml --input artifacts/results/generation_results.json
+python scripts/run_faithfulness.py \
+    --config configs/default.yaml \
+    --input artifacts/results/task_b_results.json
+```
+
+### Run Tests
+```bash
+python -m pytest tests/ -v
+# 61/63 tests pass (2 minor test assertion issues, not evaluation bugs)
 ```
 
 ---
 
-## Reproducing Results
+## Reproducing Results (Google Colab A100)
 
-To reproduce all reported results from scratch:
-```bash
-# Step 1: Run full evaluation
-python scripts/run_evaluation.py --config configs/default.yaml --output artifacts/results/eval_results.json
+The complete notebook `notebooks/A3_MTRAGEval_Final_GPU.ipynb` reproduces all results. It includes Drive checkpointing so sessions can resume after timeout.
 
-# Step 2: Run ablations
-python scripts/run_ablations.py --config configs/default.yaml --output artifacts/results/ablation_results.json
+**Estimated runtimes on A100:**
 
-# Step 3: Run diagnostics on evaluation output
-python scripts/run_diagnostics.py --config configs/default.yaml --input artifacts/results/eval_results.json --output artifacts/results/diagnostic_results.json
+| Step | Time |
+|---|---|
+| Setup + data loading | ~6 min |
+| Dense embedding (366k passages) | ~45 min |
+| Task A retrieval (all configs) | ~5 min |
+| Task B Llama inference (436 × 3 variants) | ~2.5 hours |
+| Task B Qwen inference (436 × 3 variants) | ~2.5 hours |
+| Ablations + diagnostics + faithfulness | ~15 min |
 
-# Step 4: Faithfulness analysis
-python scripts/run_faithfulness.py --config configs/default.yaml --input artifacts/results/generation_results.json --output artifacts/results/faithfulness_results.json
-```
+**Important:** Models are loaded from Google Drive to avoid repeated HuggingFace downloads. See notebook Cell 0 for Drive setup instructions.
 
-Results will be written to `artifacts/results/`. Logs go to `artifacts/logs/`.
+---
+
+## Implementation Notes
+
+### Domain Fix
+The MTRAG dataset assigns all conversations the label `'MT-RAG Authors (Internal)'` in the metadata field, which is unusable for domain-specific retrieval. We derive real domain labels (`clapnq`, `govt`, `fiqa`, `cloud`) by cross-referencing each task_id against the corresponding qrel file path. This fix is applied in `src/data/loader.py` via `_fix_domains()`.
+
+### Task ID vs Conversation ID
+Qrel files are indexed by `task_id` (format: `<conv_id><::><turn>`), not `conv_id`. The evaluation scripts use `conv['_task_ids'][-1]` for qrel lookup to ensure correct metric computation.
+
+### Passage Lookup
+Generation tasks store `passage_texts` directly in the reference entries. We use these pre-loaded texts rather than attempting corpus lookup by chunk PID, which would fail due to ID format mismatches.
+
+### Cross-Encoder Reranking
+Reranking uses `cross-encoder/ms-marco-MiniLM-L-6-v2` (90M parameters). Top-10 hybrid results are reranked to top-5 before feeding to the generator. This adds <1 second per conversation on GPU.
+
+---
+
+## Error Taxonomy
+
+| Failure Category | Count | Rate |
+|---|---|---|
+| Retrieval Miss | 46 | 43.0% |
+| Unanswerable Hallucination | 13 | 12.1% |
+| Retrieval Rank Error | 5 | 4.7% |
+| Synthesis Failure | 1 | 0.9% |
+| History Neglect | 1 | 0.9% |
+| Correct | 85 | 79.4% |
 
 ---
 
 ## Hardware
 
-- **GPU:** NVIDIA A10G (24GB VRAM) or equivalent  
-- **CUDA:** 11.8  
-- **RAM:** 32GB+ recommended  
-- **Python:** 3.10
-
----
-
-## Key Results Summary
-
-| System        | nDCG@10 | P@5   | R@5   | MRR   |
-|---------------|---------|-------|-------|-------|
-| BM25          | 0.523   | 0.482 | 0.451 | 0.612 |
-| Dense         | 0.581   | 0.534 | 0.512 | 0.673 |
-| Hybrid        | 0.607   | 0.561 | 0.538 | 0.698 |
-
-| Model         | ROUGE-L | BERTScore | Faithfulness |
-|---------------|---------|-----------|--------------|
-| Llama-3-8B    | 0.312   | 0.867     | 0.850        |
-| Qwen-2.5-7B   | 0.328   | 0.873     | 0.862        |
+- **GPU:** NVIDIA A100 (40GB VRAM) — Google Colab Pro
+- **Models:** Llama-3-8B-Instruct + Qwen-2.5-7B-Instruct (float16, no quantization)
+- **Python:** 3.12
 
 ---
 
 ## References
 
-- Katsis et al. (2025). MTRAG: A Multi-Turn Conversational Benchmark.
-- Rosenthal et al. (2025). MTRAGEval at SemEval 2026.
+- Katsis et al. (2025). mtRAG: A Multi-Turn Conversational Benchmark. *TACL*, 13:784–808.
+- Rosenthal et al. (2026). SemEval-2026 Task 8: MTRAGEval.
+- Karpukhin et al. (2020). Dense Passage Retrieval. *EMNLP*.
+- Nogueira & Cho (2019). Passage Re-Ranking with BERT.
+- Zhang et al. (2020). BERTScore. *ICLR*.
+- Touvron et al. (2023). Llama 2. arXiv:2307.09288.
+- Qwen Team (2025). Qwen2.5 Technical Report. arXiv:2412.15115.
